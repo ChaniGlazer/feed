@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const SCORE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
+const COMPLEXITY_LABELS = { 1: "קל", 2: "בינוני", 3: "מורכב", 4: "מורכב מאוד" };
+
 export default function FeedClient({ userName }) {
   const router = useRouter();
   const [ideas, setIdeas] = useState([]);
@@ -10,6 +13,7 @@ export default function FeedClient({ userName }) {
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
+  const [drafts, setDrafts] = useState({});
 
   async function loadIdeas() {
     setLoading(true);
@@ -19,7 +23,20 @@ export default function FeedClient({ userName }) {
       return;
     }
     const data = await res.json();
-    setIdeas(data.ideas || []);
+    const list = data.ideas || [];
+    setIdeas(list);
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const idea of list) {
+        if (!next[idea.id]) {
+          next[idea.id] = {
+            score: idea.my_score || 5,
+            complexity: idea.my_complexity || 2,
+          };
+        }
+      }
+      return next;
+    });
     setLoading(false);
   }
 
@@ -56,6 +73,42 @@ export default function FeedClient({ userName }) {
   async function handleLogout() {
     await fetch("/api/logout", { method: "POST" });
     router.push("/");
+  }
+
+  async function handleVote(ideaId) {
+    const res = await fetch(`/api/ideas/${ideaId}/vote`, { method: "POST" });
+    if (!res.ok) return;
+    const { voted, count } = await res.json();
+    setIdeas((prev) =>
+      prev.map((idea) =>
+        idea.id === ideaId
+          ? { ...idea, voted_by_me: voted, vote_count: count }
+          : idea
+      )
+    );
+  }
+
+  function setDraftField(ideaId, field, value) {
+    setDrafts((prev) => ({
+      ...prev,
+      [ideaId]: { ...prev[ideaId], [field]: value },
+    }));
+  }
+
+  async function handleRate(ideaId) {
+    const draft = drafts[ideaId];
+    if (!draft) return;
+
+    const res = await fetch(`/api/ideas/${ideaId}/rate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ score: draft.score, complexity: draft.complexity }),
+    });
+    if (!res.ok) return;
+    const summary = await res.json();
+    setIdeas((prev) =>
+      prev.map((idea) => (idea.id === ideaId ? { ...idea, ...summary } : idea))
+    );
   }
 
   return (
@@ -101,6 +154,74 @@ export default function FeedClient({ userName }) {
             </div>
             <div className="seal-rule" />
             <p style={styles.content}>{idea.content}</p>
+            <div style={styles.cardFooter}>
+              <button
+                onClick={() => handleVote(idea.id)}
+                style={idea.voted_by_me ? styles.voteActive : styles.vote}
+              >
+                ▲ {idea.vote_count}
+              </button>
+            </div>
+
+            <div style={styles.ratingPanel}>
+              <p style={styles.ratingSummary}>
+                {idea.rating_count > 0 ? (
+                  <>
+                    ציון ממוצע: {idea.avg_score.toFixed(1)}/10 · מורכבות
+                    משוערת: {COMPLEXITY_LABELS[Math.round(idea.avg_complexity)]}{" "}
+                    ({idea.rating_count} דירוגים)
+                  </>
+                ) : (
+                  "עדיין אין דירוגים - היי הראשונה לדרג"
+                )}
+              </p>
+
+              <div style={styles.ratingForm}>
+                <label style={styles.ratingLabel}>
+                  הציון שלך
+                  <select
+                    value={drafts[idea.id]?.score ?? 5}
+                    onChange={(e) =>
+                      setDraftField(idea.id, "score", Number(e.target.value))
+                    }
+                    style={styles.scoreSelect}
+                  >
+                    {SCORE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div style={styles.complexityRow}>
+                  {Object.entries(COMPLEXITY_LABELS).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        setDraftField(idea.id, "complexity", Number(value))
+                      }
+                      style={
+                        drafts[idea.id]?.complexity === Number(value)
+                          ? styles.complexityBtnActive
+                          : styles.complexityBtn
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRate(idea.id)}
+                  style={styles.saveRatingBtn}
+                >
+                  {idea.my_score ? "עדכון דירוג" : "שמירת דירוג"}
+                </button>
+              </div>
+            </div>
           </article>
         ))}
       </div>
@@ -195,4 +316,93 @@ const styles = {
     whiteSpace: "pre-wrap",
   },
   muted: { color: "#8b96a8", fontSize: 14 },
+  cardFooter: {
+    marginTop: 12,
+    display: "flex",
+    justifyContent: "flex-start",
+  },
+  vote: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "5px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(184, 146, 63, 0.35)",
+    background: "transparent",
+    color: "#c7cfdb",
+    fontSize: 13,
+  },
+  voteActive: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "5px 12px",
+    borderRadius: 12,
+    border: "1px solid #b8923f",
+    background: "rgba(184, 146, 63, 0.2)",
+    color: "#dcc98a",
+    fontWeight: 600,
+    fontSize: 13,
+  },
+  ratingPanel: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTop: "1px solid rgba(184, 146, 63, 0.2)",
+  },
+  ratingSummary: {
+    margin: "0 0 10px",
+    color: "#a9b4c4",
+    fontSize: 12,
+  },
+  ratingForm: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 10,
+  },
+  ratingLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "#c7cfdb",
+  },
+  scoreSelect: {
+    padding: "4px 8px",
+    borderRadius: 3,
+    border: "1px solid rgba(184,146,63,0.35)",
+    background: "rgba(246,242,233,0.06)",
+    color: "#f6f2e9",
+    fontSize: 13,
+  },
+  complexityRow: {
+    display: "flex",
+    gap: 6,
+  },
+  complexityBtn: {
+    padding: "4px 10px",
+    borderRadius: 12,
+    border: "1px solid rgba(184, 146, 63, 0.35)",
+    background: "transparent",
+    color: "#c7cfdb",
+    fontSize: 12,
+  },
+  complexityBtnActive: {
+    padding: "4px 10px",
+    borderRadius: 12,
+    border: "1px solid #b8923f",
+    background: "rgba(184, 146, 63, 0.2)",
+    color: "#dcc98a",
+    fontWeight: 600,
+    fontSize: 12,
+  },
+  saveRatingBtn: {
+    padding: "5px 14px",
+    borderRadius: 3,
+    border: "none",
+    background: "#3f6e63",
+    color: "#f6f2e9",
+    fontSize: 12,
+    fontWeight: 600,
+  },
 };

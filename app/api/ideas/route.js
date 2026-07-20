@@ -3,7 +3,12 @@ import { listIdeas, addIdea } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
-  const ideas = listIdeas();
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "אין הרשאה" }, { status: 401 });
+  }
+
+  const ideas = listIdeas(user.id);
   return NextResponse.json({ ideas });
 }
 

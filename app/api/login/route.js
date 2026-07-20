@@ -13,7 +13,10 @@ export async function POST(request) {
   }
   if (!user.email_verified) {
     return NextResponse.json(
-      { error: "צריך לאמת את המייל לפני ההתחברות - בדקי את תיבת הדואר" },
+      {
+        error: "צריך לאמת את המייל לפני ההתחברות - בדקי את תיבת הדואר",
+        code: "EMAIL_NOT_VERIFIED",
+      },
       { status: 403 }
     );
   }

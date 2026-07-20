@@ -24,6 +24,8 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
     justVerified ? "המייל אומת בהצלחה - אפשר להתחבר." : ""
   );
   const [loading, setLoading] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendStatus, setResendStatus] = useState("idle"); // "idle" | "sending" | "sent" | "error"
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -40,11 +42,37 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
         router.push("/feed");
       } else {
         setError(data.error || "התחברות נכשלה");
+        if (data.code === "EMAIL_NOT_VERIFIED") {
+          setResendEmail(email);
+          setResendStatus("idle");
+        }
       }
     } catch {
       setError("משהו השתבש, נסי שוב");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setResendStatus("sending");
+    try {
+      const res = await fetch("/api/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resendEmail }),
+      });
+      if (res.ok) {
+        setResendStatus("sent");
+        setNotice("שלחנו מייל אימות חדש - בדקי את תיבת הדואר");
+        setError("");
+      } else {
+        setResendStatus("error");
+        setError("שליחת המייל נכשלה, נסי שוב מאוחר יותר");
+      }
+    } catch {
+      setResendStatus("error");
+      setError("משהו השתבש, נסי שוב");
     }
   }
 
@@ -68,6 +96,8 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setNotice("נרשמת בהצלחה! שלחנו מייל אימות - לחצי על הקישור כדי להתחבר.");
+        setResendEmail(email);
+        setResendStatus("idle");
         setMode("login");
         setPassword("");
       } else {
@@ -95,6 +125,7 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
             onClick={() => {
               setMode("login");
               setError("");
+              setResendEmail("");
             }}
             style={mode === "login" ? styles.tabActive : styles.tab}
           >
@@ -105,6 +136,7 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
             onClick={() => {
               setMode("signup");
               setError("");
+              setResendEmail("");
             }}
             style={mode === "signup" ? styles.tabActive : styles.tab}
           >
@@ -158,6 +190,19 @@ export default function LoginSignupForm({ justVerified, verifyError, authError }
 
             {notice && <p style={styles.notice}>{notice}</p>}
             {error && <p style={styles.error}>{error}</p>}
+
+            {resendEmail && resendStatus !== "sent" && (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendStatus === "sending"}
+                style={styles.resendButton}
+              >
+                {resendStatus === "sending"
+                  ? "שולחת..."
+                  : "שליחת מייל אימות חוזר"}
+              </button>
+            )}
 
             <button type="submit" disabled={loading} style={styles.button}>
               {loading ? "נכנסת..." : "כניסה למרחב"}
@@ -355,6 +400,14 @@ const styles = {
     color: "#e08a76",
     fontSize: 13,
     margin: 0,
+  },
+  resendButton: {
+    padding: "8px 14px",
+    borderRadius: 3,
+    border: "1px solid rgba(184, 146, 63, 0.4)",
+    background: "transparent",
+    color: "#dcc98a",
+    fontSize: 13,
   },
   button: {
     marginTop: 8,
