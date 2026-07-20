@@ -1,0 +1,63 @@
+@import url("https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Rubik:wght@400;500;600&display=swap");
+
+:root {
+  --ink: #12233b;
+  --ink-soft: #2c3f58;
+  --paper: #f6f2e9;
+  --paper-dim: #ece5d4;
+  --gold: #b8923f;
+  --gold-soft: #dcc98a;
+  --teal: #3f6e63;
+  --danger: #a4402f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--ink);
+  background-image: radial-gradient(
+    circle at 20% 10%,
+    #17304f 0%,
+    var(--ink) 55%
+  );
+  color: var(--paper);
+  font-family: "Rubik", system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Frank Ruhl Libre", serif;
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+/* פס זהב דק - מוטיב "חותם" שחוזר לאורך האתר */
+.seal-rule {
+  height: 2px;
+  width: 48px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  border-radius: 2px;
+}

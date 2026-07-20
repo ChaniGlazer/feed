@@ -1,0 +1,74 @@
+# מרחב הרעיונות
+
+מרחב פרטי, מוגן בהרשמה עם הזמנה, שבו יזמות יכולות לפרסם רעיונות עם חותמת זמן
+כהוכחת בעלות. הכניסה היא עם חשבון אמיתי - מייל+סיסמה (עם אימות מייל) או
+Google - כך שכל רעיון משויך למי שבאמת פרסמה אותו.
+
+## הרצה מקומית
+
+```bash
+npm install
+cp .env.example .env.local   # למלא SESSION_SECRET, INVITE_CODE, ומפתחות Resend/Google
+npm run dev
+```
+
+האתר יעלה על http://localhost:3000
+
+### הגדרת שירותים חיצוניים
+
+- **Resend (שליחת מיילי אימות)** - להירשם ב-resend.com, ליצור API key, ולשים
+  אותו ב-`RESEND_API_KEY`. לבדיקות אפשר להשאיר את `RESEND_FROM_EMAIL`
+  כברירת המחדל (`onboarding@resend.dev`) - במצב הזה Resend שולח רק לכתובת
+  שנרשמה לחשבון. כדי לשלוח לכל כתובת צריך לאמת דומיין ב-Resend ולעדכן את
+  `RESEND_FROM_EMAIL`.
+- **Google OAuth** - ב-Google Cloud Console: APIs & Services → Credentials →
+  Create Credentials → OAuth client ID (מסוג Web application). ב-
+  Authorized redirect URIs להוסיף `http://localhost:3000/api/auth/google/callback`
+  (ובדפלוי - את כתובת הפרודקשן המקבילה). את ה-Client ID וה-Secret לשים ב-
+  `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+
+## איך זה עובד
+
+- **דף הבית (`/`)** - טופס התחברות/הרשמה (עם טאב מעבר ביניהם) + כפתור
+  "המשיכי עם Google".
+  - **הרשמה** - שם, מייל, סיסמה, קוד הזמנה (`INVITE_CODE`), ואישור תנאים
+    (איסור העתקת רעיונות). נשלח מייל אימות; רק אחרי לחיצה על הקישור אפשר
+    להתחבר.
+  - **התחברות** - מייל+סיסמה של חשבון מאומת, או Google. חשבון Google *חדש*
+    (בלי חשבון קיים עם אותו מייל) דורש גם קוד הזמנה - לכן צריך למלא אותו
+    בטופס ההרשמה לפני לחיצה על כפתור Google.
+  - בהצלחה נוצרת עוגיית `session` חתומה (HMAC, httpOnly, 30 יום).
+- **`/feed`** - מוגן ע"י `middleware.js`. מציג את כל הרעיונות (חדש למעלה),
+  וטופס להוספת רעיון חדש (רק תוכן - השם נלקח אוטומטית מהחשבון המחובר). כל
+  רעיון נשמר עם `created_at` אוטומטי ומשויך ל-`user_id`.
+- **מסד נתונים** - `node:sqlite` מובנה, בקובץ מקומי (`ideas.db`), עם דפוס
+  Lazy Proxy כדי לא לפתוח את הקובץ בזמן ה-build. טבלאות: `users`,
+  `verification_tokens`, `ideas`.
+- **הצפנת סיסמאות** - `scrypt` מובנה ב-Node (`node:crypto`), בלי ספריות
+  חיצוניות.
+- **הגנת רעיונות** - כרגע ברמת "הוכחת בעלות" (שם מהחשבון + חותמת זמן, גלוי
+  לכל מי שנכנסה) ולא ברמת הרשאות עדינות (רעיון גלוי רק לחלק מהמשתמשות).
+
+## דפלוי ל-Render
+
+1. דחפי את הפרויקט ל-GitHub.
+2. ב-Render: New Web Service → חברי את הריפו.
+3. Build Command: `npm install && npm run build`
+4. Start Command: `npm start`
+5. משתני סביבה (ראי `.env.example`):
+   - `SESSION_SECRET`, `INVITE_CODE`
+   - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (ועם redirect URI שמצביע
+     לדומיין של Render)
+   - `DB_PATH` - נתיב לקובץ ה-DB, למשל `/data/ideas.db` אם מוסיפים Persistent Disk
+6. אם רוצים שהרעיונות/החשבונות לא יימחקו בכל דפלוי - להוסיף **Persistent Disk**
+   ב-Render ולהגדיר את `DB_PATH` לנתיב שבתוך הדיסק. בלי דיסק קבוע, ה-DB יתאפס
+   בכל דפלוי מחדש.
+
+## הרחבות עתידיות אפשריות
+
+- שליחת מייל חוזר לאימות (resend) אם הקישור פג תוקף
+- הגבלת קצב פרסום רעיונות / הרשמות (אנטי-ספאם)
+- ייצוא רעיון בודד ל-PDF עם חותמת זמן כהוכחה רשמית
+- אפשרות מחיקה/עריכה ע"י בעלת הרעיון (יש כבר `user_id` על כל רעיון - קל
+  להוסיף בדיקת בעלות ב-API)
